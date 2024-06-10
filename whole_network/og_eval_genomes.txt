@@ -1,0 +1,83 @@
+def eval_genomes(genomes, config, winner=0):
+    for genome_id, genome in genomes:
+        reset_stations(station_objs)
+        genome.fitness = 0
+        total_visited = 1
+        net = neat.nn.FeedForwardNetwork.create(genome, config)
+        starting_station_name = "Heathrow Terminal 4"
+        total_visited = 1
+        new_station = station_objs[starting_station_name]
+        # initiate clock
+        start_time = dt.time(5, 0)
+        clock = dt.datetime.combine(dt.date.min, start_time)
+        # loop over time
+        max_time = dt.datetime.combine(dt.date.min + dt.timedelta(days=1), dt.time(1, 0))
+        previous_stations = []
+        current_direction = "up"
+        current_line = "piccadilly"
+        new_station.visit(genome, current_line)
+        if winner:
+            # pass
+            print(f"Station: {new_station}, Fitness: {genome.fitness}, Total Visited: {total_visited}, Time: {clock.time()}")
+        while clock < max_time:
+            station = new_station
+            num_plats = station.num_platforms
+            previous_stations.append(station)
+            waiting_times = time_to_next_train(station, clock, current_direction, current_line)
+            if waiting_times == [10000] * 8:
+                break
+            need_to_visit = unvisited_stations(station, station_objs)
+            going_back = going_back_on_yourself(station, previous_stations)
+            current_direction_binary = 1 if current_direction == "up" else 0
+            foot_in_lines = 1 if ("line" in [plat.line for plat in station.platforms]) else 0
+            inputs = need_to_visit + going_back + [total_visited] + [current_direction_binary] + [foot_in_lines] + [num_plats] # + trains_left
+            # get output from net
+            output = np.argmax(net.activate(inputs)) % num_plats
+            while (next_station_name := station.platforms[output].next_stop) == "End":
+                output += 1
+                output %= num_plats
+            # update time
+            jump1 = train_waiting_time(waiting_times, output)
+            if jump1 > dt.timedelta(minutes=30):
+                while jump1 > dt.timedelta(minutes=30):
+                    output += 1
+                    output %= num_plats
+                    jump1 = train_waiting_time(waiting_times, output)
+                    next_station_name = station.platforms[output].next_stop
+            jump2 = time_to_next_station(station, output)
+            try:
+                if next_station_name == previous_stations[-2].name:
+                    # if one of the next stations is End:
+                    terminus = False
+                    for plat in station.platforms:
+                        if plat.next_stop == "End":
+                            terminus = True
+                            break
+                    if not terminus:
+                        if winner:
+                            # pass
+                            print("went back on yourself")
+                        genome.fitness -= 1e6
+            except IndexError:
+                pass
+            # update time
+            clock += jump1 + jump2
+            # make movement
+            new_station = station_objs[next_station_name]
+            current_direction = station.platforms[output].direction
+            current_line = station.platforms[output].line
+            # call visit
+            if not station.visited:
+                total_visited += station.visit(genome, current_line)
+            total_visited += new_station.visit(genome, current_line)
+            if winner:
+                # pass
+                print(f"Station: {new_station}, Fitness: {genome.fitness}, Total Visited: {total_visited}, Time: {clock.time()}")
+            # if done
+            if total_visited == 272:
+                break
+        time_taken = (clock - dt.datetime.combine(dt.date.min, start_time)) // dt.timedelta(minutes=1)
+        genome.fitness -= time_taken * 1e0
+        if winner:
+            print("Final fitness: ", genome.fitness)
+            print("Time taken: ", time_taken)

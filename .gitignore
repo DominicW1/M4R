@@ -160,3 +160,11 @@ cython_debug/
 #.idea/
 key.env
 test_requests.py
+neat-checkpoint*
+Digraph*
+speciation*
+# *.json
+*.xml
+*.svg
+*.png
+*.xlsx
